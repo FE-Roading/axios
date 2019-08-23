@@ -1,4 +1,3 @@
-/* axios v0.19.0 | (c) 2019 by Matt Zabriskie */
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
 		module.exports = factory();
@@ -63,11 +62,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	'use strict';
 	
-	var utils = __webpack_require__(2);
-	var bind = __webpack_require__(3);
+	var utils = __webpack_require__(2);  // axios的工具函数封装
+	var bind = __webpack_require__(3);  // 函数bind功能实现
 	var Axios = __webpack_require__(5);
-	var mergeConfig = __webpack_require__(22);
-	var defaults = __webpack_require__(11);
+	var mergeConfig = __webpack_require__(22); // 属性合并，优先使用第二个参数的属性值
+	var defaults = __webpack_require__(11);  // axios的默认配置载入
 	
 	/**
 	 * Create an instance of Axios
@@ -77,9 +76,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function createInstance(defaultConfig) {
 	  var context = new Axios(defaultConfig);
+	  // instance()执行方式与axios.request()调用方式一致
 	  var instance = bind(Axios.prototype.request, context);
 	
-	  // Copy axios.prototype to instance
+	  // Copy axios.prototype to instance: context用于绑定到运行方法的this指向
 	  utils.extend(instance, Axios.prototype, context);
 	
 	  // Copy context to instance
@@ -108,6 +108,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	axios.all = function all(promises) {
 	  return Promise.all(promises);
 	};
+	// 二次包装的功能函数： 没有任何副作用
 	axios.spread = __webpack_require__(25);
 	
 	module.exports = axios;
@@ -269,7 +270,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	/**
 	 * Determine if a value is a URLSearchParams object
-	 *
+	 * URLSearchParams 接口定义了一些实用的方法来处理 URL 的查询字符串。
 	 * @param {Object} val The value to test
 	 * @returns {boolean} True if value is a URLSearchParams object, otherwise false
 	 */
@@ -462,6 +463,9 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	'use strict';
 	
+	/*
+	函数调用的this指向绑定
+	 */
 	module.exports = function bind(fn, thisArg) {
 	  return function wrap() {
 	    var args = new Array(arguments.length);
@@ -497,9 +501,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	'use strict';
 	
 	var utils = __webpack_require__(2);
-	var buildURL = __webpack_require__(6);
-	var InterceptorManager = __webpack_require__(7);
-	var dispatchRequest = __webpack_require__(8);
+	var buildURL = __webpack_require__(6); // 将URL参数格式化[可以自定义格式化方法]到URL上
+	var InterceptorManager = __webpack_require__(7); // 拦截器管理：原理较为简单
+	var dispatchRequest = __webpack_require__(8);  // 发送服务器请求
 	var mergeConfig = __webpack_require__(22);
 	
 	/**
@@ -522,14 +526,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	Axios.prototype.request = function request(config) {
 	  /*eslint no-param-reassign:0*/
-	  // Allow for axios('example/url'[, config]) a la fetch API
+	  // Allow for axios('example/url'[, config]) a la fetch API： 灵活传参的兼容写法
 	  if (typeof config === 'string') {
 	    config = arguments[1] || {};
 	    config.url = arguments[0];
 	  } else {
 	    config = config || {};
 	  }
-	
+	  // 配置合并，优先使用config配置
 	  config = mergeConfig(this.defaults, config);
 	  config.method = config.method ? config.method.toLowerCase() : 'get';
 	
@@ -590,6 +594,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	var utils = __webpack_require__(2);
 	
+	// URI转移后的部分转译特殊字符编码还原
 	function encode(val) {
 	  return encodeURIComponent(val).
 	    replace(/%40/gi, '@').
@@ -606,6 +611,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 *
 	 * @param {string} url The base of the url (e.g., http://www.google.com)
 	 * @param {object} [params] The params to be appended
+	 * @param  params的自定义序列化函数
 	 * @returns {string} The formatted url
 	 */
 	module.exports = function buildURL(url, params, paramsSerializer) {
@@ -615,10 +621,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	
 	  var serializedParams;
+	  // 如果传入参数的自定义序列化函数，则直接调用进行序列化处理
 	  if (paramsSerializer) {
 	    serializedParams = paramsSerializer(params);
+	  //  如果params是内置的URL查询字符串对象，则直接调用其方法
 	  } else if (utils.isURLSearchParams(params)) {
 	    serializedParams = params.toString();
+	    /**
+	     * 否则，按统一方法进行处理：
+	     * 1、去除掉所有的值为null或"undefined"项
+	     * 2、将值value为数组的项，键key修改为key[]；
+	     * 3、值value不为数组的值修改为临时的数组，对值value进行遍历，把日期值转换为时间字符串，把对象直接string化，
+	     * 生成键值对并分别进行URI编码后修改部分特殊字符，生成组值：key=value或key[]=value(这种可能会存在多个)
+	     * 4、把所有的生成结果用&符号拼接
+	     */
 	  } else {
 	    var parts = [];
 	
@@ -634,8 +650,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 	
 	      utils.forEach(val, function parseValue(v) {
+	        // 是否是日期
 	        if (utils.isDate(v)) {
 	          v = v.toISOString();
+	        //  是否是对象：直接序列化未字符串
 	        } else if (utils.isObject(v)) {
 	          v = JSON.stringify(v);
 	        }
@@ -645,13 +663,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    serializedParams = parts.join('&');
 	  }
-	
+	  // 如果序列化结果不为空，则进一步进行处理
 	  if (serializedParams) {
+	    // 如果传入的url中含有hash符号，则只取其前半段
 	    var hashmarkIndex = url.indexOf('#');
 	    if (hashmarkIndex !== -1) {
 	      url = url.slice(0, hashmarkIndex);
 	    }
-	
+	    // 如果URL中已包含?，则直接加上&进行拼接；如果没有，则加上？进行拼接
 	    url += (url.indexOf('?') === -1 ? '?' : '&') + serializedParams;
 	  }
 	
@@ -724,11 +743,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	'use strict';
 	
 	var utils = __webpack_require__(2);
-	var transformData = __webpack_require__(9);
-	var isCancel = __webpack_require__(10);
-	var defaults = __webpack_require__(11);
-	var isAbsoluteURL = __webpack_require__(20);
-	var combineURLs = __webpack_require__(21);
+	var transformData = __webpack_require__(9); // 数据转换：可以进行多次转换
+	var isCancel = __webpack_require__(10); // __CANCEL__是否为true
+	var defaults = __webpack_require__(11);  // 获取默认配置
+	var isAbsoluteURL = __webpack_require__(20);  // 是否时绝对url
+	var combineURLs = __webpack_require__(21);  // url拼接
 	
 	/**
 	 * Throws a `Cancel` if cancellation has been requested.
@@ -741,35 +760,37 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	/**
 	 * Dispatch a request to the server using the configured adapter.
-	 *
+	 * 发送请求到服务端
 	 * @param {object} config The config that is to be used for the request
 	 * @returns {Promise} The Promise to be fulfilled
 	 */
 	module.exports = function dispatchRequest(config) {
+	  // 如果已设置为取消，则运行取消程序
 	  throwIfCancellationRequested(config);
 	
 	  // Support baseURL config
+	  // 如果请求的url不是绝对url且存在baseURL，则拼接生成新的URL
 	  if (config.baseURL && !isAbsoluteURL(config.url)) {
 	    config.url = combineURLs(config.baseURL, config.url);
 	  }
 	
-	  // Ensure headers exist
+	  // Ensure headers exist 确保请求头不是undefined
 	  config.headers = config.headers || {};
 	
-	  // Transform request data
+	  // Transform request data：对请求数据，依次调用所有的transformRequest进行处理
 	  config.data = transformData(
 	    config.data,
 	    config.headers,
 	    config.transformRequest
 	  );
 	
-	  // Flatten headers
+	  // Flatten headers：对请求头对象进行整理，扁平化为一维
 	  config.headers = utils.merge(
 	    config.headers.common || {},
 	    config.headers[config.method] || {},
 	    config.headers || {}
 	  );
-	
+	  // 删除部分请求头字段
 	  utils.forEach(
 	    ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
 	    function cleanHeaderConfig(method) {
@@ -780,6 +801,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  var adapter = config.adapter || defaults.adapter;
 	
 	  return adapter(config).then(function onAdapterResolution(response) {
+	    // 如果已设置为取消，则运行取消程序
 	    throwIfCancellationRequested(config);
 	
 	    // Transform response data
@@ -791,6 +813,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	    return response;
 	  }, function onAdapterRejection(reason) {
+	    // 如果请求未被取消
 	    if (!isCancel(reason)) {
 	      throwIfCancellationRequested(config);
 	
@@ -851,20 +874,24 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
-	
+	/**
+	 * axios的默认设置并返回
+	 */
 	var utils = __webpack_require__(2);
+	// 修改对象的指定字段名
 	var normalizeHeaderName = __webpack_require__(12);
 	
 	var DEFAULT_CONTENT_TYPE = {
 	  'Content-Type': 'application/x-www-form-urlencoded'
 	};
 	
+	// 对于未设置的Content-Type设置指定值
 	function setContentTypeIfUnset(headers, value) {
 	  if (!utils.isUndefined(headers) && utils.isUndefined(headers['Content-Type'])) {
 	    headers['Content-Type'] = value;
 	  }
 	}
-	
+	// 根据运行环境[ NodeJS/Web ]，载入默认的Adapter
 	function getDefaultAdapter() {
 	  var adapter;
 	  // Only Node.JS has a process variable that is of [[Class]] process
@@ -879,8 +906,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 	
 	var defaults = {
+	  // 允许自定义处理请求，以使测试更轻松。返回一个 promise 并应用一个有效的响应
 	  adapter: getDefaultAdapter(),
 	
+	  // 允许在向服务器发送前，修改请求数据。默认会修正部分请求头字段名；针对部分请求数据类型在没有设置Content-Type时，
+	  // 来设置Content-Type类型
 	  transformRequest: [function transformRequest(data, headers) {
 	    normalizeHeaderName(headers, 'Accept');
 	    normalizeHeaderName(headers, 'Content-Type');
@@ -906,7 +936,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	    return data;
 	  }],
-	
+	  // 在传递给then/catch前，允许修改响应数据。默认会尝试将字符串类型转换为对象
 	  transformResponse: [function transformResponse(data) {
 	    /*eslint no-param-reassign:0*/
 	    if (typeof data === 'string') {
@@ -927,7 +957,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	  xsrfHeaderName: 'X-XSRF-TOKEN',
 	
 	  maxContentLength: -1,
-	
+	  /*
+	  * 定义对于给定的HTTP 响应状态码是resolve或reject promise。如果validateStatus返回true，
+	  * (或者设置为null或undefined)，promise将resolve; 否则，promise将被rejected
+	  * 默认：返回状态码在200-300之间，则表示请求成功
+	  */
 	  validateStatus: function validateStatus(status) {
 	    return status >= 200 && status < 300;
 	  }
@@ -957,7 +991,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	'use strict';
 	
 	var utils = __webpack_require__(2);
-	
+	/**
+	 * 对对象的指定字段名进行替换[格式化]
+	 * @param headers [object]
+	 * @param normalizedName [string]
+	 */
 	module.exports = function normalizeHeaderName(headers, normalizedName) {
 	  utils.forEach(headers, function processHeader(value, name) {
 	    if (name !== normalizedName && name.toUpperCase() === normalizedName.toUpperCase()) {
@@ -975,9 +1013,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	'use strict';
 	
 	var utils = __webpack_require__(2);
+	// 根据响应状态来决定是否reject：config.validateStatus配置项
 	var settle = __webpack_require__(14);
 	var buildURL = __webpack_require__(6);
 	var parseHeaders = __webpack_require__(17);
+	// 判断当前URL与传入的URL是否存在跨域
 	var isURLSameOrigin = __webpack_require__(18);
 	var createError = __webpack_require__(15);
 	
@@ -1158,7 +1198,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	/**
 	 * Resolve or reject a Promise based on response status.
-	 *
+	 * 根据响应状态来决定是否reject
 	 * @param {Function} resolve A function that resolves the promise.
 	 * @param {Function} reject A function that rejects the promise.
 	 * @param {object} response The response.
@@ -1315,7 +1355,11 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
-	
+	/**
+	 * 先判断是浏览器环境，还是其他环境：
+	 * > 浏览器环境需要验证是否会跨域，判断传入的URL是否与当前页面的URL存在跨域
+	 * > 其他环境不需要直接返回为函数 => 总是返回为true
+	 */
 	var utils = __webpack_require__(2);
 	
 	module.exports = (
@@ -1494,7 +1538,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	/**
 	 * Config-specific merge-function which creates a new config-object
 	 * by merging two configuration objects together.
-	 *
+	 * 属性合并，优先使用第二个参数的属性值
 	 * @param {Object} config1
 	 * @param {Object} config2
 	 * @returns {Object} New object resulting from merging config2 to config1
@@ -1504,12 +1548,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	  config2 = config2 || {};
 	  var config = {};
 	
+	  // 先复制config2的部分属性
 	  utils.forEach(['url', 'method', 'params', 'data'], function valueFromConfig2(prop) {
 	    if (typeof config2[prop] !== 'undefined') {
 	      config[prop] = config2[prop];
 	    }
 	  });
-	
+	  // 以下属性复制，优先使用config2的属性，config1替补。对于负责类型的属性值进行深度复制
 	  utils.forEach(['headers', 'auth', 'proxy'], function mergeDeepProperties(prop) {
 	    if (utils.isObject(config2[prop])) {
 	      config[prop] = utils.deepMerge(config1[prop], config2[prop]);
@@ -1521,7 +1566,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	      config[prop] = config1[prop];
 	    }
 	  });
-	
+	  // 以下属性复制，优先使用config2的属性，config1替补。
 	  utils.forEach([
 	    'baseURL', 'transformRequest', 'transformResponse', 'paramsSerializer',
 	    'timeout', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName',
@@ -1548,7 +1593,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	/**
 	 * A `Cancel` is an object that is thrown when an operation is canceled.
-	 *
 	 * @class
 	 * @param {string=} message The message.
 	 */
@@ -1570,12 +1614,12 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
+	/* eslint-disable */
 	
 	var Cancel = __webpack_require__(23);
 	
 	/**
 	 * A `CancelToken` is an object that can be used to request cancellation of an operation.
-	 *
 	 * @class
 	 * @param {Function} executor The executor function.
 	 */
@@ -1583,7 +1627,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	  if (typeof executor !== 'function') {
 	    throw new TypeError('executor must be a function.');
 	  }
-	
+	  /**
+	   取消功能的核心是通过CancelToken内的this.promise = new Promise(resolve => resolvePromise = resolve)，
+	   得到实例属性promise，此时该promise的状态为pending。
+	   通过这个属性，在/lib/adapters/xhr.js文件中继续给这个promise实例添加.then方法
+	   （xhr.js文件的159行config.cancelToken.promise.then(message => request.abort())）；
+	   */
 	  var resolvePromise;
 	  this.promise = new Promise(function promiseExecutor(resolve) {
 	    resolvePromise = resolve;
@@ -1591,6 +1640,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	  var token = this;
 	  executor(function cancel(message) {
+	    // 表示取消ajax请求的操作已经执行了，就不再执行后续的操作了
 	    if (token.reason) {
 	      // Cancellation has already been requested
 	      return;
@@ -1626,6 +1676,38 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 	
 	module.exports = CancelToken;
+	
+	/*
+	可以使用 CancelToken.source 工厂方法创建 cancel token，像这样：
+	var CancelToken = axios.CancelToken;
+	var source = CancelToken.source();
+	
+	axios.get('/user/12345', {
+	  cancelToken: source.token
+	}).catch(function(thrown) {
+	  if (axios.isCancel(thrown)) {
+	    console.log('Request canceled', thrown.message);
+	  } else {
+	    // 处理错误
+	  }
+	});
+	
+	// 取消请求（message 参数是可选的）
+	source.cancel('Operation canceled by the user.');
+	2.还可以通过传递一个 executor 函数到 CancelToken 的构造函数来创建 cancel token：
+	var CancelToken = axios.CancelToken;
+	var cancel;
+	
+	axios.get('/user/12345', {
+	  cancelToken: new CancelToken(function executor(c) {
+	    // executor 函数接收一个 cancel 函数作为参数
+	    cancel = c;
+	  })
+	});
+	
+	// 取消请求
+	cancel();
+	 */
 
 
 /***/ }),
